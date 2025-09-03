@@ -62,7 +62,7 @@ jobs:
     if: needs.test.outputs.pw_outcome != 'success'
     runs-on: ubuntu-latest
     steps:
-        - name: Send failure email via Mailgun
+      - name: Send failure email via Mailgun
         if: needs.test.outputs.pw_outcome != 'success'
         env:
             MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
