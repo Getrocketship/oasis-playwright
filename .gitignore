@@ -1,0 +1,6 @@
+/node_modules
+/playwright-report
+/screens
+/test-results
+package-lock.json
+package.json
