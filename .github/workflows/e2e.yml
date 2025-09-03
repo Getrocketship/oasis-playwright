@@ -16,51 +16,35 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# .github/workflows/e2e.yml
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      pw_outcome: ${{ steps.pw.outcome }} # expose step outcome to other jobs
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
-
-      - name: Install deps
-        run: |
+      - run: |
           if [ -f package-lock.json ]; then npm ci; else npm install --no-fund --no-audit; fi
-
-      # Cache browser binaries (~/.cache/ms-playwright)
-      - name: Read Playwright version
-        id: pw
-        run: echo "PW_VERSION=$(node -p "require('@playwright/test/package.json').version")" >> $GITHUB_ENV
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PW_VERSION }}-chromium
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      # Install only Chromium (fast if cache hits)
       - name: Install Playwright browsers (Chromium only)
         run: npx playwright install chromium
-
-      # If you previously used --with-deps: drop it. ubuntu-latest already has the needed libs for Chromium.
-
       - name: Run Playwright tests
+        id: pw
         run: npx playwright test
-
+        continue-on-error: true   # <-- do not fail the job; let downstream steps run
       - name: Upload HTML report as artifact
         if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: playwright-report
+
   deploy:
     needs: [test]
-    if: always()          # still deploy the report even on failures
+    if: always()
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -74,8 +58,8 @@ jobs:
 
   email:
     needs: [test, deploy]
-    # Only send email if the test job actually failed
-    if: needs.test.result == 'failure'
+    # 🔑 send email if the Playwright step was not "success"
+    if: needs.test.outputs.pw_outcome != 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Send failure email via Mailgun
