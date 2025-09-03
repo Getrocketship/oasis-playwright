@@ -58,3 +58,45 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: playwright-report
+  deploy:
+    needs: [test]
+    if: always()          # still deploy the report even on failures
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  email:
+    needs: [test, deploy]
+    # Only send email if the test job actually failed
+    if: needs.test.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure email via Mailgun
+        env:
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_TO: ${{ secrets.MAILGUN_TO }}
+          MAILGUN_FROM: ${{ secrets.MAILGUN_FROM }}
+          REPORT_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          SUBJECT="❌ Playwright failed"
+          TEXT="One or more tests failed. Report: ${REPORT_URL}"
+          HTML="<p>One or more tests failed.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
+
+          ENDPOINT="https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages"
+          AUTH=$(printf "api:%s" "${MAILGUN_API_KEY}" | base64)
+
+          curl -s -X POST "$ENDPOINT" \
+            -H "Authorization: Basic $AUTH" \
+            -F from="${MAILGUN_FROM:-Playwright <postmaster@${MAILGUN_DOMAIN}>}" \
+            -F to="${MAILGUN_TO}" \
+            -F subject="$SUBJECT" \
+            -F text="$TEXT" \
+            -F html="$HTML"
