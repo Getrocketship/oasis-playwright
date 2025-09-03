@@ -77,9 +77,9 @@ jobs:
             API_BASE="${MAILGUN_API_BASE:-https://api.mailgun.net}"
             ENDPOINT="${API_BASE}/v3/${MAILGUN_DOMAIN}/messages"
 
-            SUBJECT="❌ Playwright failed"
-            TEXT="One or more tests failed. Report: ${REPORT_URL}"
-            HTML="<p>One or more tests failed.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
+            SUBJECT="❌ Playwright failed for Oasis"
+            TEXT="One or more tests failed for oasisanswers.com. Report: ${REPORT_URL}"
+            HTML="<p>One or more tests failed for oasisanswers.com.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
 
             # --fail-with-body makes curl exit nonzero on 4xx/5xx and prints server error body
             curl --fail-with-body -sS -v \
