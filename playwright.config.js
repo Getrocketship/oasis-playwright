@@ -6,14 +6,13 @@ export default defineConfig({
   use: {
     headless: true,
     baseURL: 'https://oasisanswers.com',
-    // Built-in artifacts:
-    screenshot: 'only-on-failure',   // auto full-page shot on failure
-    video: 'retain-on-failure',      // video on failure
-    trace: 'on-first-retry',         // trace on first retry
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    trace: 'on-first-retry',
   },
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['./reporters/mailgun-reporter.ts']
+    ['./reporters/mailgun-reporter.ts'], // optional if you want the immediate email too
   ],
 });
