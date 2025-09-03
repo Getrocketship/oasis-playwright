@@ -15,4 +15,7 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['./reporters/mailgun-reporter.ts'], // optional if you want the immediate email too
   ],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+  ],
 });
