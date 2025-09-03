@@ -62,25 +62,35 @@ jobs:
     if: needs.test.outputs.pw_outcome != 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Send failure email via Mailgun
+        - name: Send failure email via Mailgun
+        if: needs.test.outputs.pw_outcome != 'success'
         env:
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-          MAILGUN_TO: ${{ secrets.MAILGUN_TO }}
-          MAILGUN_FROM: ${{ secrets.MAILGUN_FROM }}
-          REPORT_URL: ${{ needs.deploy.outputs.page_url }}
+            MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+            MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+            MAILGUN_TO: ${{ secrets.MAILGUN_TO }}
+            MAILGUN_FROM: ${{ secrets.MAILGUN_FROM }}
+            REPORT_URL: ${{ needs.deploy.outputs.page_url }}
+            MAILGUN_API_BASE: ${{ vars.MAILGUN_API_BASE }} # optional; set to https://api.eu.mailgun.net if you're on EU region
         run: |
-          SUBJECT="❌ Playwright failed"
-          TEXT="One or more tests failed. Report: ${REPORT_URL}"
-          HTML="<p>One or more tests failed.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
+            set -euo pipefail
 
-          ENDPOINT="https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages"
-          AUTH=$(printf "api:%s" "${MAILGUN_API_KEY}" | base64)
+            API_BASE="${MAILGUN_API_BASE:-https://api.mailgun.net}"
+            ENDPOINT="${API_BASE}/v3/${MAILGUN_DOMAIN}/messages"
 
-          curl -s -X POST "$ENDPOINT" \
-            -H "Authorization: Basic $AUTH" \
-            -F from="${MAILGUN_FROM:-Playwright <postmaster@${MAILGUN_DOMAIN}>}" \
-            -F to="${MAILGUN_TO}" \
-            -F subject="$SUBJECT" \
-            -F text="$TEXT" \
-            -F html="$HTML"
+            SUBJECT="❌ Playwright failed"
+            TEXT="One or more tests failed. Report: ${REPORT_URL}"
+            HTML="<p>One or more tests failed.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
+
+            # --fail-with-body makes curl exit nonzero on 4xx/5xx and prints server error body
+            curl --fail-with-body -sS -v \
+            -u "api:${MAILGUN_API_KEY}" \
+            --form-string from="${MAILGUN_FROM:-Playwright <postmaster@${MAILGUN_DOMAIN}>}" \
+            --form-string to="${MAILGUN_TO}" \
+            --form-string subject="${SUBJECT}" \
+            --form-string text="${TEXT}" \
+            --form-string html="${HTML}" \
+            "${ENDPOINT}"
+
+
+
+
