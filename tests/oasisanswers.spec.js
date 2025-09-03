@@ -51,7 +51,7 @@ test('Add to cart flow (with report screenshots)', async ({ page }) => {
 
   try {
     // At least one visible item in the (now-open) mini-cart
-    await expect(page.locator('.woocommerce-mini-cart .cart_item').first()).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('.woocommerce-mini-cart .cart_itemm').first()).toBeVisible({ timeout: 20000 });
     await shot(page, 'after (assertion passed)');
   } catch (err) {
     // Attach one more screenshot right at failure time

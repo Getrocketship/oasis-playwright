@@ -1,15 +1,16 @@
 name: E2E Tests
 
 on:
+  schedule:
+    - cron: '0 * * * *'   # every hour (UTC)
+  workflow_dispatch:       # manual run
   push:
-    branches: [ main ]
-  pull_request:
-  workflow_dispatch:
+    branches: [ main ]     # optional: also run on pushes to main
 
 permissions:
   contents: read
-  pages: write       # for deploying to GitHub Pages
-  id-token: write    # for OIDC auth to Pages
+  pages: write            # deploy Playwright report to GitHub Pages
+  id-token: write
 
 concurrency:
   group: pages
@@ -26,37 +27,38 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: 'npm'            # keep if you committed package-lock.json
 
       - name: Install deps
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-fund --no-audit
+          fi
 
-      - name: Install Playwright Browsers
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Run tests
-        id: run-tests
-        env:
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-          MAILGUN_TO: ${{ secrets.MAILGUN_TO }}
-          MAILGUN_FROM: ${{ secrets.MAILGUN_FROM }}
-          # REPORT_URL will be filled after deploy; we’ll send a second email if needed (optional)
-        run: npx playwright test || echo "TESTS_FAILED=1" >> $GITHUB_ENV
+      - name: Run Playwright tests
+        run: npx playwright test
 
+      # Always upload the HTML report so we can deploy it even if tests failed
       - name: Upload HTML report as artifact
-        if: always() # upload even if tests failed
+        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: playwright-report
 
   deploy:
     needs: [test]
-    if: always() # we still want to deploy the report, pass or fail
+    if: always()          # still deploy the report even on failures
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
@@ -64,37 +66,29 @@ jobs:
 
   email:
     needs: [test, deploy]
-    if: always() # decide inside step whether to send
+    # Only send email if the test job actually failed
+    if: needs.test.result == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - name: Send failure email via Mailgun (only if tests failed)
+      - name: Send failure email via Mailgun
         env:
           MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
           MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
           MAILGUN_TO: ${{ secrets.MAILGUN_TO }}
           MAILGUN_FROM: ${{ secrets.MAILGUN_FROM }}
           REPORT_URL: ${{ needs.deploy.outputs.page_url }}
-          TESTS_FAILED: ${{ needs.test.outputs.TESTS_FAILED }}
         run: |
-          # If tests failed, the custom reporter already tried to email DURING the run.
-          # This block ensures an email is sent with the FINAL Pages URL as well.
-          if [ "${{ env.TESTS_FAILED }}" = "1" ]; then
-            echo "Tests failed — sending final email with Pages URL"
-            REPORT_URL="${{ env.REPORT_URL }}"
-            SUBJECT="❌ Playwright failed (report)"
-            TEXT="One or more tests failed. Report: ${REPORT_URL}"
-            HTML="<p>One or more tests failed.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
+          SUBJECT="❌ Playwright failed"
+          TEXT="One or more tests failed. Report: ${REPORT_URL}"
+          HTML="<p>One or more tests failed.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
 
-            ENDPOINT="https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages"
-            AUTH=$(printf "api:%s" "${MAILGUN_API_KEY}" | base64)
+          ENDPOINT="https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages"
+          AUTH=$(printf "api:%s" "${MAILGUN_API_KEY}" | base64)
 
-            curl -s -X POST "$ENDPOINT" \
-              -H "Authorization: Basic $AUTH" \
-              -F from="${MAILGUN_FROM:-Playwright <postmaster@${MAILGUN_DOMAIN}>}" \
-              -F to="${MAILGUN_TO}" \
-              -F subject="$SUBJECT" \
-              -F text="$TEXT" \
-              -F html="$HTML"
-          else
-            echo "Tests passed — no email."
-          fi
+          curl -s -X POST "$ENDPOINT" \
+            -H "Authorization: Basic $AUTH" \
+            -F from="${MAILGUN_FROM:-Playwright <postmaster@${MAILGUN_DOMAIN}>}" \
+            -F to="${MAILGUN_TO}" \
+            -F subject="$SUBJECT" \
+            -F text="$TEXT" \
+            -F html="$HTML"
